@@ -1,0 +1,58 @@
+Project Specification: ShelfSage (24h Hackathon Version)
+
+Tagline: “Never waste a bite. Smart pantry management for home users and small businesses.”
+
+1. Scope
+Target: homeowners, students, families
+Core goal: let users log items, track expiration, and get daily usage suggestions
+Build a working, visual demo in 24h
+Skip advanced features like full meal plans, push notifications, or voice in MVP
+2. Core Features (MVP)
+Item Logging
+Upload photo or manual entry (skip barcode scanning if too slow)
+Input: name, quantity, expiration date, optional category
+AI Usage Suggestions
+Simple template-based prompts:
+“Use [item] today in [common use]”
+Pre-generate suggestions for demo items to save time
+Dashboard
+Display items in list + simple color coding:
+Red = use today
+Yellow = soon
+Green = safe
+Optional small “weekly waste saved” stat
+Demo Items
+Pre-populate 10–15 common pantry items (milk, eggs, bread, cheese, veggies)
+3. Technical Stack
+Frontend: React or simple HTML/CSS/JS
+Upload/manual entry form
+Dashboard with list + color-coded items
+Backend: Node.js or Python Flask/FastAPI
+Endpoints:
+POST /add-item → log item
+GET /dashboard → fetch all items + suggestions
+Database: MongoDB Atlas free tier
+Collections: users, items, suggestions
+AI: Gemini or open-source LLM
+Generate simple usage suggestions from item name + expiration
+Pre-fill suggestions for demo items for speed
+4. MVP Flow (~2 min demo)
+Open dashboard → empty
+Upload 3–5 items (milk, eggs, bread) → items appear with red/yellow/green highlight
+Click an item → shows AI usage suggestion
+Dashboard shows summary: “3 items expiring soon”
+5. Hackathon Shortcuts
+Pre-populate 10–15 items + AI suggestions to make the demo instant
+Skip complex barcode scanning → use manual entry or sample photos
+Keep dashboard simple (list + color highlights)
+6. Optional Enhancements (if time permits)
+Pantry layout visualization
+Quick “combine items into a simple recipe” AI suggestion
+Add one or two voice tips using ElevenLabs (short, pre-recorded)
+7. GitHub Deployment
+Push all code + demo data to: https://github.com/ivyyy23/ShelfSage.git
+Suggested structure:
+/frontend
+/backend
+/database
+/demo-data
