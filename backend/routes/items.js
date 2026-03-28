@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const Item = require('../models/Item');
 const { identifyFoodFromImage, generateSuggestion } = require('../services/gemini');
+const { extractExpiryFromImage } = require('../services/ocr');
 
 // Configure multer for memory storage (no disk writes)
 const upload = multer({
@@ -57,6 +58,40 @@ router.post('/', async (req, res) => {
   } catch (error) {
     console.error('Error adding item:', error);
     res.status(500).json({ error: 'Failed to add item' });
+  }
+});
+
+// POST /api/items/analyze - Analyze image for food name and expiry date (no DB save)
+router.post('/analyze', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image uploaded' });
+    }
+
+    // Run Gemini Vision and Tesseract OCR in parallel
+    const [identified, ocrResult] = await Promise.all([
+      identifyFoodFromImage(req.file.buffer, req.file.mimetype),
+      extractExpiryFromImage(req.file.buffer)
+    ]);
+
+    // Prefer OCR-parsed date (from label text), fall back to Gemini's extracted date
+    let expirationDate = ocrResult.expiryDate || identified.expirationDate || null;
+
+    // Last resort: estimate from shelf life
+    if (!expirationDate && identified.estimatedShelfLifeDays) {
+      const d = new Date();
+      d.setDate(d.getDate() + identified.estimatedShelfLifeDays);
+      expirationDate = d.toISOString().split('T')[0];
+    }
+
+    res.json({
+      name: identified.name || '',
+      category: identified.category || 'Other',
+      expirationDate: expirationDate || ''
+    });
+  } catch (error) {
+    console.error('Error analyzing image:', error);
+    res.status(500).json({ error: 'Failed to analyze image' });
   }
 });
 

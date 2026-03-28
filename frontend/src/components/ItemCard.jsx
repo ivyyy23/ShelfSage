@@ -20,11 +20,22 @@ function getStatusClass(status) {
 }
 
 function getExpiryLabel(daysUntilExpiry) {
-  if (daysUntilExpiry < 0) return `Expired ${Math.abs(daysUntilExpiry)} day${Math.abs(daysUntilExpiry) !== 1 ? 's' : ''} ago`;
+  if (daysUntilExpiry < 0) {
+    const abs = Math.abs(daysUntilExpiry);
+    return `Expired ${abs} day${abs !== 1 ? 's' : ''} ago`;
+  }
   if (daysUntilExpiry === 0) return 'Expires today!';
-  if (daysUntilExpiry === 1) return 'Expires tomorrow';
-  if (daysUntilExpiry <= 7) return `Expires in ${daysUntilExpiry} days`;
-  return `${daysUntilExpiry} days remaining`;
+  if (daysUntilExpiry < 7) return `Expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`;
+  if (daysUntilExpiry < 30) {
+    const weeks = Math.floor(daysUntilExpiry / 7);
+    return `Expires in ${weeks} week${weeks !== 1 ? 's' : ''}`;
+  }
+  if (daysUntilExpiry < 365) {
+    const months = Math.floor(daysUntilExpiry / 30);
+    return `Expires in ${months} month${months !== 1 ? 's' : ''}`;
+  }
+  const years = Math.floor(daysUntilExpiry / 365);
+  return `Expires in ${years} year${years !== 1 ? 's' : ''}`;
 }
 
 function getExpiryColorClass(status) {
@@ -35,13 +46,13 @@ function getExpiryColorClass(status) {
 
 function getBadgeClass(status) {
   if (status === 'expired') return 'badge badge-danger';
-  if (status === 'warning') return 'badge badge-warning';
+  if (status === 'warning') return 'badge badge-expiring';
   return 'badge badge-safe';
 }
 
 function getStatusLabel(status) {
   if (status === 'expired') return 'Use Today';
-  if (status === 'warning') return 'Use Soon';
+  if (status === 'warning') return '🔴 Expiring Soon';
   return 'Fresh';
 }
 

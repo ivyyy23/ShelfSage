@@ -43,7 +43,7 @@ itemSchema.virtual('status').get(function () {
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   if (diffDays <= 0) return 'expired';
-  if (diffDays <= 3) return 'warning';
+  if (diffDays <= 14) return 'warning';
   return 'safe';
 });
 

@@ -52,4 +52,25 @@ router.get('/recipe-suggestion', async (req, res) => {
   }
 });
 
+// POST /api/ai/recipe-suggestion - Generate recipes from selected pantry items
+router.post('/recipe-suggestion', async (req, res) => {
+  try {
+    const { itemIds } = req.body;
+    let items;
+
+    if (itemIds && itemIds.length > 0) {
+      items = await Item.find({ _id: { $in: itemIds } });
+    } else {
+      // Fall back to all expiring items
+      items = await Item.find().sort({ expirationDate: 1 }).limit(10);
+    }
+
+    const recipe = await generateRecipeSuggestion(items);
+    res.json({ recipe });
+  } catch (error) {
+    console.error('Error generating recipe:', error);
+    res.status(500).json({ error: 'Failed to generate recipe suggestion' });
+  }
+});
+
 module.exports = router;

@@ -53,10 +53,16 @@ Suggest a simple way to use this item today. Be specific with a recipe idea or u
 async function identifyFoodFromImage(imageBuffer, mimeType) {
   if (model) {
     try {
-      const prompt = `Analyze this food image and respond with ONLY a JSON object (no markdown, no code fences) in this exact format:
-{"name": "food name", "category": "one of: Dairy, Produce, Meat, Grains, Canned, Condiments, Frozen, Beverages, Snacks, Other", "estimatedShelfLifeDays": number}
+      const prompt = `Analyze this food item or food label image and respond with ONLY a JSON object (no markdown, no code fences) in this exact format:
+{"name": "food name", "category": "one of: Dairy, Produce, Meat, Grains, Canned, Condiments, Frozen, Beverages, Snacks, Other", "estimatedShelfLifeDays": number, "expirationDate": "YYYY-MM-DD or null"}
 
-Be specific about the food item name. Estimate a reasonable shelf life in days.`;
+If this is a food label or packaging:
+- Look for text like "Best By", "Best Before", "Use By", "Exp", "BB", "Expires", "Expiry Date" followed by a date
+- Extract that expiry date and return it in YYYY-MM-DD format
+- For month/year dates (e.g. "03/2026"), use the last day of that month
+
+If no expiry date is visible in the image, set "expirationDate" to null.
+Be specific about the food item name.`;
 
       const imagePart = {
         inlineData: {
@@ -69,7 +75,6 @@ Be specific about the food item name. Estimate a reasonable shelf life in days.`
       const response = await result.response;
       const text = response.text().trim();
 
-      // Parse JSON from response, handling possible markdown code fences
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
@@ -77,11 +82,11 @@ Be specific about the food item name. Estimate a reasonable shelf life in days.`
       throw new Error('Could not parse Gemini response');
     } catch (error) {
       console.error('Gemini Vision error:', error.message);
-      return { name: 'Unknown Food Item', category: 'Other', estimatedShelfLifeDays: 7 };
+      return { name: '', category: 'Other', estimatedShelfLifeDays: 7, expirationDate: null };
     }
   }
 
-  return { name: 'Unknown Food Item', category: 'Other', estimatedShelfLifeDays: 7 };
+  return { name: '', category: 'Other', estimatedShelfLifeDays: 7, expirationDate: null };
 }
 
 // Generate a dashboard summary
@@ -143,27 +148,31 @@ function getMockSuggestion(itemName, category) {
   return categoryDefaults[category] || `💡 Use your ${itemName} today! Check online for quick recipe ideas with this ingredient.`;
 }
 
-// Suggest a recipe using expiring pantry items
+// Suggest recipes using selected pantry items
 async function generateRecipeSuggestion(items) {
-  // Prefer expiring items, fall back to any items
-  const expiring = items.filter(i => {
-    const days = Math.ceil((new Date(i.expirationDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    return days <= 5;
-  });
-  const pool = expiring.length > 0 ? expiring : items.slice(0, 6);
-  const itemList = pool.map(i => i.name).join(', ');
+  if (!items || items.length === 0) {
+    return '🍽️ Add some items to your pantry first, then come back for recipe ideas!';
+  }
 
-  if (model && pool.length > 0) {
+  const itemList = items.map(i => i.name).join(', ');
+
+  if (model) {
     try {
-      const prompt = `You are ShelfSage, a smart pantry assistant. Suggest a simple recipe using some or all of these pantry items that need to be used soon: ${itemList}.
+      const prompt = `You are ShelfSage, a smart pantry assistant. Suggest 2 different simple recipes using some or all of these pantry items: ${itemList}.
 
-Provide:
-1. A catchy recipe name with an emoji
-2. Which of the listed ingredients to use
-3. Simple 3-5 step instructions
-4. Estimated prep + cook time
+For each recipe provide exactly this format:
 
-Keep it practical and beginner-friendly. Be concise but clear.`;
+🍳 **[Recipe Name]**
+**Ingredients:** [comma-separated list of ingredients from the pantry items above]
+**Instructions:**
+1. [step]
+2. [step]
+3. [step]
+⏱️ ~[X] minutes
+
+---
+
+Use exactly "---" as separator between recipes. Keep each recipe concise and beginner-friendly.`;
 
       const result = await model.generateContent(prompt);
       return result.response.text().trim();
@@ -172,11 +181,26 @@ Keep it practical and beginner-friendly. Be concise but clear.`;
     }
   }
 
-  if (pool.length === 0) {
-    return '🍽️ Add some items to your pantry first, then come back for recipe ideas!';
-  }
+  return `🍳 **Quick Pantry Stir-Fry**
+**Ingredients:** ${itemList}
+**Instructions:**
+1. Heat a pan over medium-high heat with a drizzle of oil
+2. Add your protein or main ingredient and cook through
+3. Toss in any vegetables and stir-fry for 3-4 minutes
+4. Season with soy sauce, garlic, or your favorite condiments
+5. Serve over rice or alongside bread
+⏱️ ~15 minutes
 
-  return `🍳 **Quick Pantry Stir-Fry**\n\nUsing: ${itemList}\n\n1. Heat a pan over medium-high heat with a drizzle of oil\n2. Add your protein or main ingredient and cook through\n3. Toss in any vegetables and stir-fry for 3-4 minutes\n4. Season with soy sauce, garlic, or your favorite condiments\n5. Serve over rice or alongside bread\n\n⏱️ Ready in about 15 minutes`;
+---
+
+🥗 **Simple Pantry Bowl**
+**Ingredients:** ${itemList}
+**Instructions:**
+1. Cook any grain you have (rice, pasta) per package directions
+2. Warm your protein and vegetables in a pan
+3. Arrange everything in a bowl
+4. Top with any condiments or sauce you have available
+⏱️ ~20 minutes`;
 }
 
 module.exports = { initGemini, generateSuggestion, identifyFoodFromImage, generateDashboardSummary, generateRecipeSuggestion };

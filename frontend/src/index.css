@@ -298,6 +298,12 @@ body::before {
   border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
+.badge-expiring {
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
 /* Category badges */
 .category-badge {
   display: inline-flex;
@@ -330,6 +336,17 @@ body::before {
   border-color: var(--brand-primary);
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
   background: rgba(255, 255, 255, 0.07);
+}
+
+/* Calendar picker icon — make it visible on dark backgrounds */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8) sepia(0.2) saturate(2) hue-rotate(120deg);
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 .input::placeholder {

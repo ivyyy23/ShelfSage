@@ -643,6 +643,111 @@
   line-height: 1.5;
 }
 
+/* ============ RECIPE SELECTOR ============ */
+.recipe-item-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.recipe-item-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  background: var(--surface-glass);
+  border: 1px solid var(--surface-glass-border);
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.recipe-item-chip input[type="checkbox"] {
+  display: none;
+}
+
+.recipe-item-chip:hover {
+  background: var(--surface-glass-hover);
+  color: var(--text-primary);
+}
+
+.recipe-item-chip.selected {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: var(--safe-light);
+}
+
+.recipe-item-chip.expired.selected {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: var(--danger-light);
+}
+
+.recipe-item-chip.warning.selected {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
+.recipe-selector-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--surface-glass-border);
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.recipe-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.recipe-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.recipe-card {
+  padding: var(--space-md);
+  background: var(--surface-glass);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--surface-glass-border);
+}
+
+/* ============ ANALYZED PREVIEW ============ */
+.analyzed-preview {
+  margin-bottom: var(--space-md);
+}
+
+.analyzed-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-sm);
+  padding: 6px 10px;
+  background: var(--safe-bg);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  color: var(--safe-light);
+}
+
+.ocr-hint {
+  color: var(--brand-primary);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
 /* ============ RESPONSIVE ============ */
 @media (max-width: 768px) {
   .app {

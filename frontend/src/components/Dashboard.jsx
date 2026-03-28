@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import ItemCard from './ItemCard';
 
 const API_BASE = '/api';
@@ -10,49 +10,69 @@ const FILTERS = [
   { key: 'safe', label: '🟢 Fresh' }
 ];
 
+const CATEGORY_EMOJIS = {
+  Dairy: '🥛', Produce: '🥬', Meat: '🥩', Grains: '🌾', Canned: '🥫',
+  Condiments: '🧂', Frozen: '❄️', Beverages: '🥤', Snacks: '🍿', Other: '📦'
+};
+
 export default function Dashboard({ items, onItemClick, onDeleteItem, onAddClick, aiSummary }) {
   const [activeFilter, setActiveFilter] = useState('all');
-  const [showRecipe, setShowRecipe] = useState(false);
-  const [recipe, setRecipe] = useState('');
-  const [recipeLoading, setRecipeLoading] = useState(false);
+  const [recipeStage, setRecipeStage] = useState('idle'); // idle | select | loading | result
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [recipes, setRecipes] = useState([]);
 
   const filtered = activeFilter === 'all'
     ? items
     : items.filter(item => item.status === activeFilter);
 
-  const handleGetRecipe = async () => {
-    setShowRecipe(true);
-    if (recipe) return; // already loaded
-    setRecipeLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/ai/recipe-suggestion`);
-      if (res.ok) {
-        const data = await res.json();
-        setRecipe(data.recipe);
-      }
-    } catch (error) {
-      console.error('Error fetching recipe:', error);
-      setRecipe('Could not generate a recipe right now. Try again!');
-    } finally {
-      setRecipeLoading(false);
+  // Default selection: all expiring/expired items
+  const openRecipeSelector = () => {
+    const defaultSelected = new Set(
+      items.filter(i => i.status === 'expired' || i.status === 'warning').map(i => i._id)
+    );
+    if (defaultSelected.size === 0) {
+      items.slice(0, 5).forEach(i => defaultSelected.add(i._id));
     }
+    setSelectedIds(defaultSelected);
+    setRecipes([]);
+    setRecipeStage('select');
   };
 
-  const handleRefreshRecipe = async () => {
-    setRecipe('');
-    setRecipeLoading(true);
+  const toggleItem = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const generateRecipes = async () => {
+    setRecipeStage('loading');
     try {
-      const res = await fetch(`${API_BASE}/ai/recipe-suggestion`);
+      const res = await fetch(`${API_BASE}/ai/recipe-suggestion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemIds: [...selectedIds] })
+      });
       if (res.ok) {
         const data = await res.json();
-        setRecipe(data.recipe);
+        // Split by --- separator for multiple recipes
+        const parts = (data.recipe || '').split(/\n---\n|\n---$|^---\n/);
+        setRecipes(parts.filter(p => p.trim()));
+      } else {
+        setRecipes(['Could not generate a recipe right now. Try again!']);
       }
     } catch (error) {
-      setRecipe('Could not generate a recipe right now. Try again!');
-    } finally {
-      setRecipeLoading(false);
+      setRecipes(['Could not generate a recipe right now. Try again!']);
     }
+    setRecipeStage('result');
   };
+
+  const selectedItems = useMemo(
+    () => items.filter(i => selectedIds.has(i._id)),
+    [items, selectedIds]
+  );
 
   return (
     <div>
@@ -68,68 +88,93 @@ export default function Dashboard({ items, onItemClick, onDeleteItem, onAddClick
       <div className="toolbar">
         <div className="filter-tabs">
           {FILTERS.map(f => (
-            <button
-              key={f.key}
+            <button key={f.key}
               className={`filter-tab ${activeFilter === f.key ? 'active' : ''}`}
               onClick={() => setActiveFilter(f.key)}
-              id={`filter-${f.key}`}
-            >
+              id={`filter-${f.key}`}>
               {f.label}
             </button>
           ))}
         </div>
         <div className="toolbar-actions">
-          <button
-            className="btn btn-ghost recipe-btn"
-            onClick={handleGetRecipe}
-            disabled={items.length === 0}
-            id="recipe-btn"
-          >
+          <button className="btn btn-ghost recipe-btn" onClick={openRecipeSelector}
+            disabled={items.length === 0} id="recipe-btn">
             🍳 What can I cook?
           </button>
-          <button
-            className="btn btn-primary add-btn"
-            onClick={onAddClick}
-            id="add-item-btn"
-          >
+          <button className="btn btn-primary add-btn" onClick={onAddClick} id="add-item-btn">
             <span className="plus-icon">+</span> Add Item
           </button>
         </div>
       </div>
 
-      {/* Recipe Panel */}
-      {showRecipe && (
+      {/* Recipe Selector Panel */}
+      {recipeStage === 'select' && (
         <div className="recipe-panel">
           <div className="recipe-header">
             <div className="ai-label">
               <span className="ai-sparkle">🍳</span>
-              Recipe Suggestion
+              Select ingredients to cook with
             </div>
-            <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-              <button
-                className="btn btn-ghost regenerate-btn"
-                onClick={handleRefreshRecipe}
-                disabled={recipeLoading}
-              >
-                {recipeLoading ? <><div className="spinner"></div> Thinking...</> : '🔄 New Recipe'}
+            <button className="btn btn-ghost regenerate-btn" onClick={() => setRecipeStage('idle')}>✕</button>
+          </div>
+          <div className="recipe-item-grid">
+            {items.map(item => (
+              <label key={item._id} className={`recipe-item-chip ${selectedIds.has(item._id) ? 'selected' : ''} ${item.status}`}>
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(item._id)}
+                  onChange={() => toggleItem(item._id)}
+                />
+                <span>{CATEGORY_EMOJIS[item.category] || '📦'}</span>
+                <span>{item.name}</span>
+              </label>
+            ))}
+          </div>
+          <div className="recipe-selector-footer">
+            <span className="recipe-count">
+              {selectedIds.size} ingredient{selectedIds.size !== 1 ? 's' : ''} selected
+            </span>
+            <button className="btn btn-primary" onClick={generateRecipes} disabled={selectedIds.size === 0}>
+              ✨ Generate Recipes
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Recipe Loading */}
+      {recipeStage === 'loading' && (
+        <div className="recipe-panel">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0', color: 'var(--text-muted)' }}>
+            <div className="spinner"></div>
+            <span>Crafting recipes using {selectedIds.size} ingredient{selectedIds.size !== 1 ? 's' : ''}...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Recipe Results */}
+      {recipeStage === 'result' && (
+        <div className="recipe-panel">
+          <div className="recipe-header">
+            <div className="ai-label">
+              <span className="ai-sparkle">🍳</span>
+              Recipe Suggestions ({recipes.length})
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn btn-ghost regenerate-btn" onClick={() => setRecipeStage('select')}>
+                ← Change Ingredients
               </button>
-              <button
-                className="btn btn-ghost regenerate-btn"
-                onClick={() => setShowRecipe(false)}
-              >
-                ✕
+              <button className="btn btn-ghost regenerate-btn" onClick={generateRecipes}>
+                🔄 New Recipes
               </button>
+              <button className="btn btn-ghost regenerate-btn" onClick={() => setRecipeStage('idle')}>✕</button>
             </div>
           </div>
-          <div className="recipe-body">
-            {recipeLoading ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', color: 'var(--text-muted)' }}>
-                <div className="spinner"></div>
-                <span>Finding the best recipe for your pantry...</span>
+          <div className="recipe-cards">
+            {recipes.map((recipe, i) => (
+              <div key={i} className="recipe-card">
+                <p className="ai-text" style={{ whiteSpace: 'pre-line' }}>{recipe.trim()}</p>
               </div>
-            ) : (
-              <p className="ai-text" style={{ whiteSpace: 'pre-line' }}>{recipe}</p>
-            )}
+            ))}
           </div>
         </div>
       )}
@@ -138,13 +183,8 @@ export default function Dashboard({ items, onItemClick, onDeleteItem, onAddClick
       {filtered.length > 0 ? (
         <div className="items-grid">
           {filtered.map((item, i) => (
-            <ItemCard
-              key={item._id}
-              item={item}
-              onClick={onItemClick}
-              onDelete={onDeleteItem}
-              index={i}
-            />
+            <ItemCard key={item._id} item={item} onClick={onItemClick}
+              onDelete={onDeleteItem} index={i} />
           ))}
         </div>
       ) : (
