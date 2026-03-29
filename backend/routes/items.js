@@ -74,20 +74,15 @@ router.post('/analyze', upload.single('image'), async (req, res) => {
       extractExpiryFromImage(req.file.buffer)
     ]);
 
-    // Prefer OCR-parsed date (from label text), fall back to Gemini's extracted date
+    // Prefer OCR-parsed date (from label text), then Gemini's extracted date
     let expirationDate = ocrResult.expiryDate || identified.expirationDate || null;
-
-    // Last resort: estimate from shelf life
-    if (!expirationDate && identified.estimatedShelfLifeDays) {
-      const d = new Date();
-      d.setDate(d.getDate() + identified.estimatedShelfLifeDays);
-      expirationDate = d.toISOString().split('T')[0];
-    }
+    let dateSource = ocrResult.expiryDate ? 'ocr' : identified.expirationDate ? 'ai' : 'none';
 
     res.json({
       name: identified.name || '',
       category: identified.category || 'Other',
-      expirationDate: expirationDate || ''
+      expirationDate: expirationDate || '',
+      dateSource
     });
   } catch (error) {
     console.error('Error analyzing image:', error);

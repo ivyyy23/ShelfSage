@@ -44,7 +44,7 @@ router.get('/dashboard-summary', async (req, res) => {
 router.get('/recipe-suggestion', async (req, res) => {
   try {
     const items = await Item.find().sort({ expirationDate: 1 });
-    const recipe = await generateRecipeSuggestion(items);
+    const recipe = await generateRecipeSuggestion({ requiredItems: items, optionalItems: [] });
     res.json({ recipe });
   } catch (error) {
     console.error('Error generating recipe:', error);
@@ -52,20 +52,35 @@ router.get('/recipe-suggestion', async (req, res) => {
   }
 });
 
-// POST /api/ai/recipe-suggestion - Generate recipes from selected pantry items
+// POST /api/ai/recipe-suggestion - Generate recipes from selected (required) and optional pantry items
 router.post('/recipe-suggestion', async (req, res) => {
   try {
-    const { itemIds } = req.body;
-    let items;
+    const { requiredItemIds, optionalItemIds, itemIds } = req.body;
 
-    if (itemIds && itemIds.length > 0) {
-      items = await Item.find({ _id: { $in: itemIds } });
+    // Support legacy itemIds as well as new required/optional split
+    let requiredItems = [];
+    let optionalItems = [];
+
+    if (requiredItemIds && requiredItemIds.length > 0) {
+      requiredItems = await Item.find({ _id: { $in: requiredItemIds } });
+    } else if (itemIds && itemIds.length > 0) {
+      // Legacy: treat all selected as required
+      requiredItems = await Item.find({ _id: { $in: itemIds } });
     } else {
-      // Fall back to all expiring items
-      items = await Item.find().sort({ expirationDate: 1 }).limit(10);
+      // Default: expiring items as required
+      requiredItems = await Item.find().sort({ expirationDate: 1 }).limit(5);
     }
 
-    const recipe = await generateRecipeSuggestion(items);
+    if (optionalItemIds && optionalItemIds.length > 0) {
+      optionalItems = await Item.find({ _id: { $in: optionalItemIds } });
+    } else {
+      // Everything not in required is optional
+      const requiredSet = new Set(requiredItems.map(i => i._id.toString()));
+      const allItems = await Item.find();
+      optionalItems = allItems.filter(i => !requiredSet.has(i._id.toString()));
+    }
+
+    const recipe = await generateRecipeSuggestion({ requiredItems, optionalItems });
     res.json({ recipe });
   } catch (error) {
     console.error('Error generating recipe:', error);

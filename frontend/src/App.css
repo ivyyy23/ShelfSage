@@ -748,6 +748,62 @@
   font-weight: 400;
 }
 
+.ocr-hint.error {
+  color: var(--danger-light);
+}
+
+.ocr-error-banner {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  font-size: 0.875rem;
+  color: var(--danger-light);
+}
+
+/* Category select + inline add */
+.category-select-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.add-category-inline {
+  display: flex;
+  gap: var(--space-xs);
+  align-items: center;
+}
+
+.add-category-inline .input {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
+/* Required badge in recipe chips */
+.required-badge {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: var(--radius-full);
+  color: var(--brand-primary-light);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-weight: 600;
+}
+
+.recipe-selector-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 var(--space-md) 0;
+}
+
+.recipe-selector-hint strong {
+  color: var(--brand-primary-light);
+}
+
 /* ============ RESPONSIVE ============ */
 @media (max-width: 768px) {
   .app {

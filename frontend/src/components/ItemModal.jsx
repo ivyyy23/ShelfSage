@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 
 const API_BASE = '/api';
 
-const CATEGORIES = ['Dairy', 'Produce', 'Meat', 'Grains', 'Canned', 'Condiments', 'Frozen', 'Beverages', 'Snacks', 'Other'];
+const DEFAULT_CATEGORIES = ['Dairy', 'Produce', 'Meat', 'Grains', 'Canned', 'Condiments', 'Frozen', 'Beverages', 'Snacks', 'Other'];
 
 const CATEGORY_EMOJIS = {
   Dairy: '🥛',
@@ -28,7 +28,8 @@ function toDateInputValue(dateStr) {
   return d.toISOString().split('T')[0];
 }
 
-export default function ItemModal({ item, onClose, onItemUpdated }) {
+export default function ItemModal({ item, onClose, onItemUpdated, categories }) {
+  const CATEGORIES = categories && categories.length > 0 ? categories : DEFAULT_CATEGORIES;
   const [suggestion, setSuggestion] = useState(item.aiSuggestion || null);
   const [loading, setLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);

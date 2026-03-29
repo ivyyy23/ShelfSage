@@ -2,9 +2,7 @@ import React, { useState, useRef } from 'react';
 
 const API_BASE = '/api';
 
-const CATEGORIES = ['Dairy', 'Produce', 'Meat', 'Grains', 'Canned', 'Condiments', 'Frozen', 'Beverages', 'Snacks', 'Other'];
-
-export default function AddItemForm({ onClose, onItemAdded }) {
+export default function AddItemForm({ onClose, onItemAdded, categories = [], onAddCategory }) {
   const [stage, setStage] = useState('idle'); // idle | analyzing | review | submitting
   const [formData, setFormData] = useState({
     name: '',
@@ -14,10 +12,14 @@ export default function AddItemForm({ onClose, onItemAdded }) {
   });
   const [previewUrl, setPreviewUrl] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+  const [ocrError, setOcrError] = useState(false); // true when no date could be extracted
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const fileInputRef = useRef(null);
 
   const handleChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    if (e.target.name === 'expirationDate') setOcrError(false);
   };
 
   const handleFileSelect = async (file) => {
@@ -28,6 +30,7 @@ export default function AddItemForm({ onClose, onItemAdded }) {
     reader.readAsDataURL(file);
 
     setStage('analyzing');
+    setOcrError(false);
 
     try {
       const fd = new FormData();
@@ -36,18 +39,22 @@ export default function AddItemForm({ onClose, onItemAdded }) {
 
       if (res.ok) {
         const data = await res.json();
+        const hasDate = data.expirationDate && data.dateSource !== 'none';
         setFormData({
           name: data.name || '',
           quantity: '1',
           category: data.category || 'Other',
-          expirationDate: data.expirationDate || ''
+          expirationDate: hasDate ? data.expirationDate : ''
         });
+        if (!hasDate) setOcrError(true);
         setStage('review');
       } else {
-        setStage('review'); // show blank form on error
+        setOcrError(true);
+        setStage('review');
       }
     } catch (error) {
       console.error('Analyze error:', error);
+      setOcrError(true);
       setStage('review');
     }
   };
@@ -89,8 +96,49 @@ export default function AddItemForm({ onClose, onItemAdded }) {
   const resetToIdle = () => {
     setStage('idle');
     setPreviewUrl(null);
+    setOcrError(false);
     setFormData({ name: '', quantity: '1', category: 'Other', expirationDate: '' });
   };
+
+  const handleAddCategory = async () => {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) return;
+    const success = await onAddCategory(trimmed);
+    if (success) {
+      setFormData(prev => ({ ...prev, category: trimmed }));
+      setNewCategoryName('');
+      setShowAddCategory(false);
+    }
+  };
+
+  const CategorySelect = ({ id }) => (
+    <div className="category-select-group">
+      <select className="input" id={id} name="category"
+        value={formData.category} onChange={handleChange}>
+        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+        <option value="__add__">+ Add Category...</option>
+      </select>
+      {formData.category === '__add__' && (
+        <div className="add-category-inline">
+          <input
+            className="input"
+            type="text"
+            placeholder="New category name..."
+            value={newCategoryName}
+            onChange={e => setNewCategoryName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddCategory())}
+            autoFocus
+          />
+          <button type="button" className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+            onClick={handleAddCategory}>Add</button>
+          <button type="button" className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+            onClick={() => { setFormData(prev => ({ ...prev, category: 'Other' })); setNewCategoryName(''); }}>
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="form-overlay" onClick={handleOverlayClick}>
@@ -152,10 +200,7 @@ export default function AddItemForm({ onClose, onItemAdded }) {
                 </div>
                 <div className="form-group">
                   <label className="label" htmlFor="item-category">Category</label>
-                  <select className="input" id="item-category" name="category"
-                    value={formData.category} onChange={handleChange}>
-                    {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
+                  <CategorySelect id="item-category" />
                 </div>
               </div>
               <div className="form-group">
@@ -181,12 +226,23 @@ export default function AddItemForm({ onClose, onItemAdded }) {
               <div className="analyzed-preview">
                 <img src={previewUrl} alt="Uploaded label" className="upload-preview" />
                 <div className="analyzed-badge">
-                  <span>✅ Label analyzed</span>
+                  {ocrError ? (
+                    <span>📸 Image uploaded</span>
+                  ) : (
+                    <span>✅ Label analyzed</span>
+                  )}
                   <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
                     onClick={resetToIdle}>
                     ↩ Re-upload
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* OCR error message */}
+            {ocrError && (
+              <div className="ocr-error-banner">
+                <span>❌ Could not extract expiry date. Please try another image or enter it manually.</span>
               </div>
             )}
 
@@ -205,16 +261,14 @@ export default function AddItemForm({ onClose, onItemAdded }) {
                 </div>
                 <div className="form-group">
                   <label className="label" htmlFor="review-category">Category</label>
-                  <select className="input" id="review-category" name="category"
-                    value={formData.category} onChange={handleChange}>
-                    {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
+                  <CategorySelect id="review-category" />
                 </div>
               </div>
               <div className="form-group">
                 <label className="label" htmlFor="review-expiration">
                   Expiration Date *
-                  {formData.expirationDate && <span className="ocr-hint"> (read from label)</span>}
+                  {formData.expirationDate && !ocrError && <span className="ocr-hint"> (read from label)</span>}
+                  {ocrError && <span className="ocr-hint error"> (enter manually)</span>}
                 </label>
                 <input className="input" type="date" id="review-expiration" name="expirationDate"
                   value={formData.expirationDate} onChange={handleChange} required />

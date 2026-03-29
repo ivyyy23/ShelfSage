@@ -54,7 +54,7 @@ async function identifyFoodFromImage(imageBuffer, mimeType) {
   if (model) {
     try {
       const prompt = `Analyze this food item or food label image and respond with ONLY a JSON object (no markdown, no code fences) in this exact format:
-{"name": "food name", "category": "one of: Dairy, Produce, Meat, Grains, Canned, Condiments, Frozen, Beverages, Snacks, Other", "estimatedShelfLifeDays": number, "expirationDate": "YYYY-MM-DD or null"}
+{"name": "food name", "category": "best matching category from: Dairy, Produce, Meat, Grains, Canned, Condiments, Frozen, Beverages, Snacks, Other", "estimatedShelfLifeDays": number, "expirationDate": "YYYY-MM-DD or null"}
 
 If this is a food label or packaging:
 - Look for text like "Best By", "Best Before", "Use By", "Exp", "BB", "Expires", "Expiry Date" followed by a date
@@ -149,30 +149,64 @@ function getMockSuggestion(itemName, category) {
 }
 
 // Suggest recipes using selected pantry items
-async function generateRecipeSuggestion(items) {
-  if (!items || items.length === 0) {
+// requiredItems: items user explicitly selected (MUST appear in recipe)
+// optionalItems: rest of pantry (AI may use these too)
+async function generateRecipeSuggestion({ requiredItems, optionalItems } = {}) {
+  const required = Array.isArray(requiredItems) ? requiredItems : [];
+  const optional = Array.isArray(optionalItems) ? optionalItems : [];
+
+  if (required.length === 0 && optional.length === 0) {
     return '🍽️ Add some items to your pantry first, then come back for recipe ideas!';
   }
 
-  const itemList = items.map(i => i.name).join(', ');
+  const requiredList = required.map(i => i.name).join(', ');
+  const optionalList = optional.map(i => i.name).join(', ');
+
+  // Add a random variation token so repeated calls produce different recipes
+  const VARIATIONS = [
+    'Think globally — consider Mediterranean, Asian, Latin American, or Indian flavor profiles.',
+    'Lean into comfort food — hearty, warming, filling dishes.',
+    'Keep it light and fresh — salads, wraps, grain bowls, or quick sautés.',
+    'Think breakfast or brunch angle if ingredients allow.',
+    'Suggest something creative and unexpected that uses these ingredients in a surprising way.'
+  ];
+  const variationHint = VARIATIONS[Math.floor(Math.random() * VARIATIONS.length)];
 
   if (model) {
     try {
-      const prompt = `You are ShelfSage, a smart pantry assistant. Suggest 2 different simple recipes using some or all of these pantry items: ${itemList}.
+      const requiredSection = requiredList
+        ? `REQUIRED INGREDIENTS (you MUST use ALL of these in every recipe): ${requiredList}`
+        : '';
+      const optionalSection = optionalList
+        ? `OPTIONAL PANTRY ITEMS (you may use any of these to complement the recipe): ${optionalList}`
+        : '';
 
-For each recipe provide exactly this format:
+      const prompt = `You are ShelfSage, a creative home cooking assistant. Generate 2 DIFFERENT realistic recipes.
 
-🍳 **[Recipe Name]**
-**Ingredients:** [comma-separated list of ingredients from the pantry items above]
+${requiredSection}
+${optionalSection}
+
+STRICT RULES:
+- Every recipe MUST include ALL required ingredients.
+- Do NOT suggest generic filler recipes (e.g., plain stir-fry template). Be specific to the actual ingredients.
+- Each recipe must be distinctly different from the other (different cuisine or cooking method).
+- ${variationHint}
+- Ingredients listed must only come from the provided lists above — no adding unlisted items except basic pantry staples (salt, pepper, water, cooking oil).
+
+For EACH recipe use EXACTLY this format:
+
+🍳 **[Specific Dish Name]**
+**Ingredients used:** [comma-separated — only from the lists above]
 **Instructions:**
-1. [step]
-2. [step]
-3. [step]
+1. [specific step]
+2. [specific step]
+3. [specific step]
+4. [specific step]
 ⏱️ ~[X] minutes
 
 ---
 
-Use exactly "---" as separator between recipes. Keep each recipe concise and beginner-friendly.`;
+Separate the two recipes with exactly "---" on its own line.`;
 
       const result = await model.generateContent(prompt);
       return result.response.text().trim();
@@ -181,25 +215,26 @@ Use exactly "---" as separator between recipes. Keep each recipe concise and beg
     }
   }
 
-  return `🍳 **Quick Pantry Stir-Fry**
-**Ingredients:** ${itemList}
+  // Fallback mock when Gemini is unavailable
+  const mainIngredient = required[0]?.name || optional[0]?.name || 'ingredients';
+  return `🍳 **${mainIngredient} Skillet**
+**Ingredients used:** ${requiredList || optionalList}
 **Instructions:**
-1. Heat a pan over medium-high heat with a drizzle of oil
-2. Add your protein or main ingredient and cook through
-3. Toss in any vegetables and stir-fry for 3-4 minutes
-4. Season with soy sauce, garlic, or your favorite condiments
-5. Serve over rice or alongside bread
+1. Heat a pan over medium heat and add a drizzle of oil
+2. Add ${mainIngredient} and cook for 5 minutes until heated through
+3. Season with salt, pepper, and any spices you have
+4. Serve hot with bread or rice
 ⏱️ ~15 minutes
 
 ---
 
-🥗 **Simple Pantry Bowl**
-**Ingredients:** ${itemList}
+🥗 **Quick ${mainIngredient} Bowl**
+**Ingredients used:** ${requiredList || optionalList}
 **Instructions:**
-1. Cook any grain you have (rice, pasta) per package directions
-2. Warm your protein and vegetables in a pan
-3. Arrange everything in a bowl
-4. Top with any condiments or sauce you have available
+1. Prepare any grain base (rice, pasta) according to package directions
+2. Warm ${mainIngredient} in a pan with a splash of olive oil
+3. Combine in a bowl and season to taste
+4. Garnish with anything fresh you have available
 ⏱️ ~20 minutes`;
 }
 

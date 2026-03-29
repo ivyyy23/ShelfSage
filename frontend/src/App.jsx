@@ -7,12 +7,15 @@ import ItemModal from './components/ItemModal';
 
 const API_BASE = '/api';
 
+const DEFAULT_CATEGORIES = ['Dairy', 'Produce', 'Meat', 'Grains', 'Canned', 'Condiments', 'Frozen', 'Beverages', 'Snacks', 'Other'];
+
 export default function App() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [aiSummary, setAiSummary] = useState('');
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
 
   // Fetch all items
   const fetchItems = useCallback(async () => {
@@ -42,20 +45,51 @@ export default function App() {
     }
   }, []);
 
+  // Fetch categories from backend
+  const fetchCategories = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/categories`);
+      if (res.ok) {
+        const data = await res.json();
+        setCategories(data);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchItems();
     fetchSummary();
-  }, [fetchItems, fetchSummary]);
+    fetchCategories();
+  }, [fetchItems, fetchSummary, fetchCategories]);
+
+  // Add a custom category
+  const handleAddCategory = useCallback(async (name) => {
+    try {
+      const res = await fetch(`${API_BASE}/categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (res.ok) {
+        setCategories(prev => [...prev, name]);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error adding category:', error);
+      return false;
+    }
+  }, []);
 
   // Handle adding a new item (from form or photo upload)
   const handleItemAdded = useCallback((newItem) => {
     setItems(prev => {
       const updated = [...prev, newItem];
-      // Sort by expiration date
       updated.sort((a, b) => new Date(a.expirationDate) - new Date(b.expirationDate));
       return updated;
     });
-    // Refresh summary
     fetchSummary();
   }, [fetchSummary]);
 
@@ -136,6 +170,8 @@ export default function App() {
         <AddItemForm
           onClose={() => setShowAddForm(false)}
           onItemAdded={handleItemAdded}
+          categories={categories}
+          onAddCategory={handleAddCategory}
         />
       )}
 
@@ -144,6 +180,7 @@ export default function App() {
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
           onItemUpdated={handleUpdateItem}
+          categories={categories}
         />
       )}
     </div>

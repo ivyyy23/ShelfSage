@@ -5,7 +5,7 @@ const API_BASE = '/api';
 
 const FILTERS = [
   { key: 'all', label: 'All Items' },
-  { key: 'expired', label: '🔴 Expiring' },
+  { key: 'expired', label: '⚫ Expired' },
   { key: 'warning', label: '🟡 Soon' },
   { key: 'safe', label: '🟢 Fresh' }
 ];
@@ -21,11 +21,12 @@ export default function Dashboard({ items, onItemClick, onDeleteItem, onAddClick
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [recipes, setRecipes] = useState([]);
 
-  const filtered = activeFilter === 'all'
-    ? items
-    : items.filter(item => item.status === activeFilter);
+  const filtered = useMemo(() => {
+    if (activeFilter === 'all') return items;
+    return items.filter(item => item.status === activeFilter);
+  }, [items, activeFilter]);
 
-  // Default selection: all expiring/expired items
+  // Default selection: all expiring/expired items as required
   const openRecipeSelector = () => {
     const defaultSelected = new Set(
       items.filter(i => i.status === 'expired' || i.status === 'warning').map(i => i._id)
@@ -50,15 +51,17 @@ export default function Dashboard({ items, onItemClick, onDeleteItem, onAddClick
   const generateRecipes = async () => {
     setRecipeStage('loading');
     try {
+      const requiredItemIds = [...selectedIds];
+      const optionalItemIds = items.filter(i => !selectedIds.has(i._id)).map(i => i._id);
+
       const res = await fetch(`${API_BASE}/ai/recipe-suggestion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemIds: [...selectedIds] })
+        body: JSON.stringify({ requiredItemIds, optionalItemIds })
       });
       if (res.ok) {
         const data = await res.json();
-        // Split by --- separator for multiple recipes
-        const parts = (data.recipe || '').split(/\n---\n|\n---$|^---\n/);
+        const parts = (data.recipe || '').split(/\n---\n|\n---$|^---\n|^---$/m);
         setRecipes(parts.filter(p => p.trim()));
       } else {
         setRecipes(['Could not generate a recipe right now. Try again!']);
@@ -113,13 +116,16 @@ export default function Dashboard({ items, onItemClick, onDeleteItem, onAddClick
           <div className="recipe-header">
             <div className="ai-label">
               <span className="ai-sparkle">🍳</span>
-              Select ingredients to cook with
+              Select required ingredients
             </div>
             <button className="btn btn-ghost regenerate-btn" onClick={() => setRecipeStage('idle')}>✕</button>
           </div>
+          <p className="recipe-selector-hint">
+            Checked items are <strong>required</strong> — the AI must use all of them. Unchecked pantry items may be used as extras.
+          </p>
           <div className="recipe-item-grid">
             {items.map(item => (
-              <label key={item._id} className={`recipe-item-chip ${selectedIds.has(item._id) ? 'selected' : ''} ${item.status}`}>
+              <label key={item._id} className={`recipe-item-chip ${selectedIds.has(item._id) ? 'selected required' : ''} ${item.status}`}>
                 <input
                   type="checkbox"
                   checked={selectedIds.has(item._id)}
@@ -127,12 +133,13 @@ export default function Dashboard({ items, onItemClick, onDeleteItem, onAddClick
                 />
                 <span>{CATEGORY_EMOJIS[item.category] || '📦'}</span>
                 <span>{item.name}</span>
+                {selectedIds.has(item._id) && <span className="required-badge">required</span>}
               </label>
             ))}
           </div>
           <div className="recipe-selector-footer">
             <span className="recipe-count">
-              {selectedIds.size} ingredient{selectedIds.size !== 1 ? 's' : ''} selected
+              {selectedIds.size} required ingredient{selectedIds.size !== 1 ? 's' : ''}
             </span>
             <button className="btn btn-primary" onClick={generateRecipes} disabled={selectedIds.size === 0}>
               ✨ Generate Recipes
@@ -146,7 +153,7 @@ export default function Dashboard({ items, onItemClick, onDeleteItem, onAddClick
         <div className="recipe-panel">
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0', color: 'var(--text-muted)' }}>
             <div className="spinner"></div>
-            <span>Crafting recipes using {selectedIds.size} ingredient{selectedIds.size !== 1 ? 's' : ''}...</span>
+            <span>Crafting recipes using {selectedIds.size} required ingredient{selectedIds.size !== 1 ? 's' : ''}...</span>
           </div>
         </div>
       )}

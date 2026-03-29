@@ -12,7 +12,6 @@ const itemSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['Dairy', 'Produce', 'Meat', 'Grains', 'Canned', 'Condiments', 'Frozen', 'Beverages', 'Snacks', 'Other'],
     default: 'Other'
   },
   expirationDate: {
