@@ -199,38 +199,43 @@ async function generateRecipeSuggestion({ requiredItems, optionalItems } = {}) {
         ? `OTHER PANTRY ITEMS (use freely to complete the recipe): ${optionalList}`
         : '';
 
-      const prompt = `You are an expert chef and home cooking assistant. Generate 2 realistic, edible recipes.
+      const prompt = `You are an expert chef working at a casual café. Generate 2 appetizing recipes.
 
 ${selectedSection}
 ${pantrySection}
 
-APPLIANCES AVAILABLE: blender, microwave, oven, toaster, stovetop pan/skillet, steamer, food processor, instant pot, rice cooker, air fryer. Use whichever fits the recipe best.
+ALWAYS-AVAILABLE STAPLES: salt, pepper, water, oil, sugar. Use freely without listing them unless they are central to the dish.
+APPLIANCES: blender, oven, microwave, toaster, stovetop. Choose the one that produces the best result for the dish.
+
+CAFÉ QUALITY CHECK — apply this before finalising each recipe:
+Ask yourself: "Would this dish be served in a casual café?"
+- If YES → keep it.
+- If NO (e.g. boiled bread, milk salad, plain sautéed fruit) → rethink.
+  Use the available appliances to elevate it into something appetising.
+  Example: bread + milk → do NOT sauté. Use the oven to make Milk-Soaked Toasted Bread (like a simplified French toast or Shokupan-style toast). That IS café-worthy.
 
 INGREDIENT RULES:
 - Ignore any name that is not a real, recognisable food item.
 - Use at least one user-selected ingredient in each recipe.
-- You may also use other pantry items and basic staples freely: water, salt, pepper, cooking oil, butter, garlic, onion, common spices.
-- Only use an ingredient in a way that makes culinary sense (no milk in a stir-fry, no fruit blended with beef, etc.).
+- Supplement with other pantry items if they improve the dish.
+- Only use each ingredient in a way that makes culinary sense.
 
-INGREDIENTS LIST RULE — critical:
-- The "Ingredients:" line must list ONLY the ingredients actually used in that recipe.
-- Ingredients may include brief prep descriptors inline, e.g. "diced onion", "grated cheese", "sliced chicken breast", "marinated chicken and yogurt". This is preferred over stating prep in the instructions.
-- Do NOT list an ingredient that does not appear in the instructions.
-- Do NOT list an ingredient that is not used at all.
+INGREDIENTS LIST — critical:
+- List ONLY ingredients actually used in the recipe.
+- Use inline prep descriptors where helpful: "diced onion", "grated cheese", "marinated chicken", "sliced bread". Do not list what you don't use.
 
-INSTRUCTIONS RULE — critical:
-- Write only steps that are actually necessary to make the dish.
-- Do NOT state obvious or trivial prep like "wash the vegetables", "peel the fruit", or "prepare X — wash or peel as needed".
-- Do NOT repeat what is already expressed in the ingredient descriptor (if you wrote "diced onion" in Ingredients, do not write "dice the onion" in Instructions).
-- Steps should describe the actual cooking: heat, combine, stir, season, blend, bake, simmer, etc.
-- Every instruction step must match the ingredients listed — no phantom ingredients, no phantom steps.
+INSTRUCTIONS — critical:
+- Write only steps needed to cook the dish. No trivial prep (washing, peeling).
+- Do not repeat what is already in the ingredient descriptor ("diced onion" → don't write "dice the onion").
+- Every step must correspond to a listed ingredient. No phantom steps, no phantom ingredients.
+- Steps describe real cooking actions: toast, bake, blend, simmer, whisk, fold, sear, etc.
 
 RECIPE RULES:
-1. Every recipe must be a normal, coherent, real-world dish a home cook would actually make.
-2. Name the dish specifically after its ingredients or style — e.g. "Spinach & Egg Scramble", "Strawberry Yogurt Smoothie", "Chicken Rice Soup". No generic names like "Quick Bowl" or "Pantry Skillet".
-3. The two recipes must be distinctly different (different cooking method or cuisine).
+1. Both recipes must be appetising, café-worthy dishes a customer would order.
+2. Name each dish specifically: "Milk-Soaked Cinnamon Toast", "Strawberry Yogurt Smoothie", "Spinach & Egg Scramble". No generic names like "Quick Bowl" or "Pantry Skillet".
+3. The two recipes must use different cooking methods or styles.
 4. ${variationHint}
-5. If no valid recipe can be formed from the selected ingredients, output ONLY the fail-safe.
+5. If no appetising recipe can be formed from the selected ingredients, output ONLY the fail-safe.
 
 FAIL-SAFE (use ONLY when truly nothing works):
 🍳 Thoughts and Prayers
@@ -239,7 +244,7 @@ Instructions:
 1. Order in.
 ⏱️ 0 minutes
 
-OUTPUT FORMAT — follow exactly, no markdown, no asterisks, no extra blank lines inside a recipe block:
+OUTPUT FORMAT — follow exactly, no markdown, no asterisks, no extra blank lines inside a recipe:
 
 🍳 <Dish Name>
 Ingredients: <comma-separated, prep descriptors allowed>
