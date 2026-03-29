@@ -162,51 +162,69 @@ async function generateRecipeSuggestion({ requiredItems, optionalItems } = {}) {
   const requiredList = required.map(i => i.name).join(', ');
   const optionalList = optional.map(i => i.name).join(', ');
 
-  // Add a random variation token so repeated calls produce different recipes
+  // Random variation style hint for each call
   const VARIATIONS = [
-    'Think globally — consider Mediterranean, Asian, Latin American, or Indian flavor profiles.',
-    'Lean into comfort food — hearty, warming, filling dishes.',
-    'Keep it light and fresh — salads, wraps, grain bowls, or quick sautés.',
-    'Think breakfast or brunch angle if ingredients allow.',
-    'Suggest something creative and unexpected that uses these ingredients in a surprising way.'
+    'Consider Mediterranean or Middle Eastern flavor profiles if compatible.',
+    'Consider Asian (Japanese, Thai, Chinese) cooking styles if compatible.',
+    'Consider a breakfast or brunch angle if ingredients allow.',
+    'Consider Latin American or Mexican flavor profiles if compatible.',
+    'Consider a comfort food, hearty, warming approach if compatible.'
   ];
   const variationHint = VARIATIONS[Math.floor(Math.random() * VARIATIONS.length)];
 
   if (model) {
     try {
       const requiredSection = requiredList
-        ? `REQUIRED INGREDIENTS (you MUST use ALL of these in every recipe): ${requiredList}`
+        ? `REQUIRED INGREDIENTS (must appear in every recipe): ${requiredList}`
         : '';
       const optionalSection = optionalList
-        ? `OPTIONAL PANTRY ITEMS (you may use any of these to complement the recipe): ${optionalList}`
+        ? `OPTIONAL PANTRY ITEMS (may use to complement): ${optionalList}`
         : '';
 
-      const prompt = `You are ShelfSage, a creative home cooking assistant. Generate 2 DIFFERENT realistic recipes.
+      const prompt = `You are ShelfSage, a home cooking assistant. Generate 2 realistic, edible recipes.
 
 ${requiredSection}
 ${optionalSection}
 
-STRICT RULES:
-- Every recipe MUST include ALL required ingredients.
-- Do NOT suggest generic filler recipes (e.g., plain stir-fry template). Be specific to the actual ingredients.
-- Each recipe must be distinctly different from the other (different cuisine or cooking method).
-- ${variationHint}
-- Ingredients listed must only come from the provided lists above — no adding unlisted items except basic pantry staples (salt, pepper, water, cooking oil).
+COMPATIBILITY RULES — follow these strictly:
+- Dairy (milk, yogurt, cream, cheese) → use in sauces, smoothies, desserts, baked goods, soups. Do NOT fry dairy with raw meat.
+- Fruits (strawberries, apples, berries, banana) → desserts, smoothies, salads. Do NOT cook fruit with savory meat unless it's a known dish (e.g. chicken mango).
+- Bread → sandwiches, toast, French toast, croutons.
+- Eggs → omelettes, scrambles, baking, fried rice.
+- Chicken / meat → savory dishes only (stir-fry, roast, soup, curry).
+- Grains (rice, pasta, oats) → bowls, soups, baked goods.
+- Vegetables → soups, stir-fry, salads, roasted sides.
+- Condiments → supporting role only (seasoning, sauce base).
 
-For EACH recipe use EXACTLY this format:
+RECIPE RULES:
+1. Each recipe must use 2–5 ingredients total.
+2. Only combine COMPATIBLE ingredient categories. If required ingredients are incompatible with each other (e.g. strawberries + raw chicken), put them in SEPARATE recipes using valid subsets.
+3. Every recipe name must be specific to the actual ingredients (not generic like "Quick Bowl" or "Pantry Skillet").
+4. Do NOT add ingredients not in the provided lists (except water, salt, pepper, cooking oil).
+5. Each recipe must be a different dish (different method or cuisine).
+6. ${variationHint}
+7. If no valid recipe can be made from ANY combination of the ingredients, output ONLY the fail-safe below.
 
-🍳 **[Specific Dish Name]**
-**Ingredients used:** [comma-separated — only from the lists above]
-**Instructions:**
-1. [specific step]
-2. [specific step]
-3. [specific step]
-4. [specific step]
-⏱️ ~[X] minutes
+FAIL-SAFE (use ONLY if truly no edible combination exists):
+🍳 Thoughts and Prayers
+Ingredients: Nothing!
+Instructions:
+1. Order in.
+⏱️ 0 minutes
+
+OUTPUT FORMAT — use EXACTLY this format for each recipe, no markdown bold, no extra lines:
+
+🍳 <Specific Dish Name>
+Ingredients: <comma-separated list — only from above>
+Instructions:
+1. <step>
+2. <step>
+3. <step>
+⏱️ <X> minutes
 
 ---
 
-Separate the two recipes with exactly "---" on its own line.`;
+Separate the two recipes with exactly "---" on its own line. Output nothing else.`;
 
       const result = await model.generateContent(prompt);
       return result.response.text().trim();
@@ -216,26 +234,24 @@ Separate the two recipes with exactly "---" on its own line.`;
   }
 
   // Fallback mock when Gemini is unavailable
-  const mainIngredient = required[0]?.name || optional[0]?.name || 'ingredients';
-  return `🍳 **${mainIngredient} Skillet**
-**Ingredients used:** ${requiredList || optionalList}
-**Instructions:**
-1. Heat a pan over medium heat and add a drizzle of oil
-2. Add ${mainIngredient} and cook for 5 minutes until heated through
-3. Season with salt, pepper, and any spices you have
-4. Serve hot with bread or rice
-⏱️ ~15 minutes
+  const mainIngredient = required[0]?.name || optional[0]?.name || 'your ingredients';
+  return `🍳 ${mainIngredient} Scramble
+Ingredients: ${(required[0]?.name || optional[0]?.name) || 'pantry items'}
+Instructions:
+1. Heat a pan over medium heat with a little oil
+2. Add ${mainIngredient} and cook through, stirring gently
+3. Season with salt and pepper to taste
+⏱️ 10 minutes
 
 ---
 
-🥗 **Quick ${mainIngredient} Bowl**
-**Ingredients used:** ${requiredList || optionalList}
-**Instructions:**
-1. Prepare any grain base (rice, pasta) according to package directions
-2. Warm ${mainIngredient} in a pan with a splash of olive oil
-3. Combine in a bowl and season to taste
-4. Garnish with anything fresh you have available
-⏱️ ~20 minutes`;
+🥗 Simple ${mainIngredient} Plate
+Ingredients: ${requiredList || optionalList}
+Instructions:
+1. Prepare ${mainIngredient} according to your preference
+2. Combine with any complementary items you have
+3. Serve and enjoy
+⏱️ 15 minutes`;
 }
 
 module.exports = { initGemini, generateSuggestion, identifyFoodFromImage, generateDashboardSummary, generateRecipeSuggestion };

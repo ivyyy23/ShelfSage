@@ -38,6 +38,26 @@ function buildDate(day, month, year) {
 }
 
 /**
+ * Try to parse a compact 6-digit (MMDDYY) or 8-digit (MMDDYYYY) numeric string.
+ * Returns ISO date string or null.
+ */
+function parseCompactNumeric(digits) {
+  if (digits.length === 8) {
+    const mm = parseInt(digits.slice(0, 2), 10);
+    const dd = parseInt(digits.slice(2, 4), 10);
+    const yyyy = parseInt(digits.slice(4, 8), 10);
+    return buildDate(dd, mm, yyyy);
+  }
+  if (digits.length === 6) {
+    const mm = parseInt(digits.slice(0, 2), 10);
+    const dd = parseInt(digits.slice(2, 4), 10);
+    const yy = parseInt(digits.slice(4, 6), 10);
+    return buildDate(dd, mm, 2000 + yy);
+  }
+  return null;
+}
+
+/**
  * Extract all candidate dates from raw OCR text.
  * Returns array of { isoDate, label: 'expiry'|'mfg'|'unknown', raw }
  */
@@ -51,12 +71,13 @@ function extractAllDates(text) {
     const isMfgLine = MFG_LABEL_RE.test(lineLower);
     const label = isExpiryLine ? 'expiry' : isMfgLine ? 'mfg' : 'unknown';
 
+    let m;
+
     // Pattern 1: "4 Mar 2030" or "14 January 2026" or "Mar 2030"
     const monthWordFull = new RegExp(
       `\\b(\\d{1,2})?\\s*(${MONTH_PATTERN})\\s+(\\d{4})\\b`,
       'gi'
     );
-    let m;
     while ((m = monthWordFull.exec(line)) !== null) {
       const day = m[1] ? parseInt(m[1], 10) : null;
       const month = MONTH_MAP[m[2].toLowerCase()];
@@ -84,6 +105,14 @@ function extractAllDates(text) {
     while ((m = mmyyyy.exec(line)) !== null) {
       const isoDate = buildDate(null, parseInt(m[1], 10), parseInt(m[2], 10));
       if (isoDate) results.push({ isoDate, label, raw: m[0] });
+    }
+
+    // Pattern 5: Compact numeric MMDDYYYY (8 digits) or MMDDYY (6 digits)
+    // Only match exactly 6 or 8 digits not surrounded by other digits
+    const compact = /(?<!\d)(\d{8}|\d{6})(?!\d)/g;
+    while ((m = compact.exec(line)) !== null) {
+      const isoDate = parseCompactNumeric(m[1]);
+      if (isoDate) results.push({ isoDate, label, raw: m[1] });
     }
   }
 
