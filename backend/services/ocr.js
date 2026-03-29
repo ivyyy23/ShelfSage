@@ -24,27 +24,37 @@ const EXPIRY_LABEL_RE = /(?:exp(?:iry|ires?|\.)?|best\s*(?:before|by)|use\s*(?:b
 const MFG_LABEL_RE = /(?:mfg|mfd|manufactured|manufacture|production|prod\.?|packed\s*on|packed\s*date|mfg\.?\s*date)/i;
 
 /**
- * Parse a date value from parts (day optional, month, year)
- * Returns ISO string "YYYY-MM-DD" or null
+ * Build a validated ISO date string from components.
+ * @param {number|null} day   - exact day, or null if unknown
+ * @param {number}      month - 1-12
+ * @param {number}      year  - 2- or 4-digit (2-digit → 20xx)
+ * @param {boolean}     firstDay - when day is null, use 1st of month (true) or last day (false)
  */
-function buildDate(day, month, year) {
+function buildDate(day, month, year, firstDay = false) {
   if (year < 100) year += 2000;
   if (month < 1 || month > 12) return null;
-  const maxDay = new Date(year, month, 0).getDate();
-  const d = day && day >= 1 && day <= maxDay ? day : maxDay; // default to last day of month
+  const maxDay = new Date(year, month, 0).getDate(); // last day of month
+  let d;
+  if (day != null && day >= 1 && day <= maxDay) {
+    d = day;
+  } else if (day == null) {
+    d = firstDay ? 1 : maxDay;
+  } else {
+    return null; // day out of range for this month
+  }
   const date = new Date(year, month - 1, d);
   if (isNaN(date.getTime())) return null;
   return date.toISOString().split('T')[0];
 }
 
 /**
- * Try to parse a compact 6-digit (MMDDYY) or 8-digit (MMDDYYYY) numeric string.
+ * Parse compact 6-digit (MMDDYY) or 8-digit (MMDDYYYY) numeric string.
  * Returns ISO date string or null.
  */
 function parseCompactNumeric(digits) {
   if (digits.length === 8) {
-    const mm = parseInt(digits.slice(0, 2), 10);
-    const dd = parseInt(digits.slice(2, 4), 10);
+    const mm   = parseInt(digits.slice(0, 2), 10);
+    const dd   = parseInt(digits.slice(2, 4), 10);
     const yyyy = parseInt(digits.slice(4, 8), 10);
     return buildDate(dd, mm, yyyy);
   }
@@ -65,54 +75,71 @@ function extractAllDates(text) {
   const results = [];
   const lines = text.split(/\n/);
 
+  const push = (isoDate, label, raw) => {
+    if (isoDate) results.push({ isoDate, label, raw });
+  };
+
   for (const line of lines) {
     const lineLower = line.toLowerCase();
     const isExpiryLine = EXPIRY_LABEL_RE.test(lineLower);
-    const isMfgLine = MFG_LABEL_RE.test(lineLower);
+    const isMfgLine   = MFG_LABEL_RE.test(lineLower);
     const label = isExpiryLine ? 'expiry' : isMfgLine ? 'mfg' : 'unknown';
 
     let m;
 
-    // Pattern 1: "4 Mar 2030" or "14 January 2026" or "Mar 2030"
-    const monthWordFull = new RegExp(
-      `\\b(\\d{1,2})?\\s*(${MONTH_PATTERN})\\s+(\\d{4})\\b`,
+    // ── Pattern 1a: "04 Mar 2030" or "4 January 2026" (DD MMM YYYY — day present)
+    const withDay = new RegExp(
+      `\\b(\\d{1,2})\\s+(${MONTH_PATTERN})\\s+(\\d{4})\\b`,
       'gi'
     );
-    while ((m = monthWordFull.exec(line)) !== null) {
-      const day = m[1] ? parseInt(m[1], 10) : null;
-      const month = MONTH_MAP[m[2].toLowerCase()];
-      const year = parseInt(m[3], 10);
-      const isoDate = buildDate(day, month, year);
-      if (isoDate) results.push({ isoDate, label, raw: m[0] });
+    while ((m = withDay.exec(line)) !== null) {
+      push(buildDate(parseInt(m[1], 10), MONTH_MAP[m[2].toLowerCase()], parseInt(m[3], 10)), label, m[0]);
     }
 
-    // Pattern 2: DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+    // ── Pattern 1b: "Mar 2030" / "March 2026" (MMM YYYY — no day → use 1st per spec)
+    const monthOnly = new RegExp(
+      `(?<!\\d\\s)(${MONTH_PATTERN})\\s+(\\d{4})\\b`,
+      'gi'
+    );
+    while ((m = monthOnly.exec(line)) !== null) {
+      // Skip if there was a preceding number (already caught by withDay)
+      const before = line.slice(0, m.index).trim();
+      if (/\d$/.test(before)) continue;
+      push(buildDate(null, MONTH_MAP[m[1].toLowerCase()], parseInt(m[2], 10), true /* firstDay */), label, m[0]);
+    }
+
+    // ── Pattern 2: MM/DD/YYYY (US format) — first number is month
+    //    When first part > 12 it can't be a month, so skip.
+    const mmddyyyy = /\b(0?[1-9]|1[0-2])\/(0?[1-9]|[12]\d|3[01])\/(20\d{2})\b/g;
+    while ((m = mmddyyyy.exec(line)) !== null) {
+      push(buildDate(parseInt(m[2], 10), parseInt(m[1], 10), parseInt(m[3], 10)), label, m[0]);
+    }
+
+    // ── Pattern 3: DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY (European / international)
+    //    Only attempt DD parse when first part can be a day (1-31).
+    //    Both formats may match the same string — dedup handles it.
     const ddmmyyyy = /\b(0?[1-9]|[12]\d|3[01])[\/\-\.](0?[1-9]|1[0-2])[\/\-\.](20\d{2})\b/g;
     while ((m = ddmmyyyy.exec(line)) !== null) {
-      const isoDate = buildDate(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));
-      if (isoDate) results.push({ isoDate, label, raw: m[0] });
+      push(buildDate(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)), label, m[0]);
     }
 
-    // Pattern 3: YYYY-MM-DD
+    // ── Pattern 4: YYYY-MM-DD (ISO)
     const yyyymmdd = /\b(20\d{2})[\/\-\.](0[1-9]|1[0-2])[\/\-\.](0[1-9]|[12]\d|3[01])\b/g;
     while ((m = yyyymmdd.exec(line)) !== null) {
-      const isoDate = buildDate(parseInt(m[3], 10), parseInt(m[2], 10), parseInt(m[1], 10));
-      if (isoDate) results.push({ isoDate, label, raw: m[0] });
+      push(buildDate(parseInt(m[3], 10), parseInt(m[2], 10), parseInt(m[1], 10)), label, m[0]);
     }
 
-    // Pattern 4: MM/YYYY standalone (no day component)
+    // ── Pattern 5: MM/YYYY standalone — use last day of month
     const mmyyyy = /\b(0?[1-9]|1[0-2])[\/\-](20\d{2})\b/g;
     while ((m = mmyyyy.exec(line)) !== null) {
-      const isoDate = buildDate(null, parseInt(m[1], 10), parseInt(m[2], 10));
-      if (isoDate) results.push({ isoDate, label, raw: m[0] });
+      push(buildDate(null, parseInt(m[1], 10), parseInt(m[2], 10), false /* lastDay */), label, m[0]);
     }
 
-    // Pattern 5: Compact numeric MMDDYYYY (8 digits) or MMDDYY (6 digits)
-    // Only match exactly 6 or 8 digits not surrounded by other digits
+    // ── Pattern 6: Compact MMDDYYYY (8 digits) or MMDDYY (6 digits)
+    //    Matched only when NOT surrounded by other digits.
     const compact = /(?<!\d)(\d{8}|\d{6})(?!\d)/g;
     while ((m = compact.exec(line)) !== null) {
-      const isoDate = parseCompactNumeric(m[1]);
-      if (isoDate) results.push({ isoDate, label, raw: m[1] });
+      push(parseCompactNumeric(m[1]), label, m[1]);
     }
   }
 
@@ -134,16 +161,15 @@ function extractAllDates(text) {
 function pickBestExpiryDate(candidates) {
   const today = new Date().toISOString().split('T')[0];
 
-  // Only future or present dates
+  // Only future or today dates, exclude manufacturing labels
   const future = candidates.filter(c => c.isoDate >= today && c.label !== 'mfg');
-
   if (future.length === 0) return null;
 
-  // Prefer expiry-labeled
+  // Prefer expiry-labeled; fall back to unknown-labeled
   const expiryLabeled = future.filter(c => c.label === 'expiry');
   const pool = expiryLabeled.length > 0 ? expiryLabeled : future;
 
-  // Pick the latest date
+  // Return the latest date in the pool
   pool.sort((a, b) => b.isoDate.localeCompare(a.isoDate));
   return pool[0].isoDate;
 }

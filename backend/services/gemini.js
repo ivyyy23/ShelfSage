@@ -186,36 +186,40 @@ async function generateRecipeSuggestion({ requiredItems, optionalItems } = {}) {
 ${requiredSection}
 ${optionalSection}
 
-COMPATIBILITY RULES — follow these strictly:
-- Dairy (milk, yogurt, cream, cheese) → use in sauces, smoothies, desserts, baked goods, soups. Do NOT fry dairy with raw meat.
-- Fruits (strawberries, apples, berries, banana) → desserts, smoothies, salads. Do NOT cook fruit with savory meat unless it's a known dish (e.g. chicken mango).
-- Bread → sandwiches, toast, French toast, croutons.
-- Eggs → omelettes, scrambles, baking, fried rice.
-- Chicken / meat → savory dishes only (stir-fry, roast, soup, curry).
-- Grains (rice, pasta, oats) → bowls, soups, baked goods.
-- Vegetables → soups, stir-fry, salads, roasted sides.
-- Condiments → supporting role only (seasoning, sauce base).
+PRE-PROCESSING — do this silently before generating recipes:
+- If any ingredient name is unrecognizable, unclear, or not a real food item, ignore it completely as if it were not listed.
+- Classify each remaining ingredient into one of: dairy, protein, grain, fruit, vegetable, condiment, beverage.
+
+COMPATIBILITY RULES — strictly enforced:
+- dairy (milk, yogurt, cream, cheese) → smoothies, sauces, soups, desserts, baked goods. NEVER combine raw dairy with raw meat in the same dish.
+- fruit (strawberries, apples, berries, banana, mango) → smoothies, desserts, fresh salads. Only combine with savory meat if it is a well-known dish (e.g. mango chicken, apple pork chops).
+- bread → sandwiches, toast, French toast, croutons, bread pudding.
+- eggs → omelettes, scrambles, fried rice, baking.
+- protein / meat (chicken, beef, fish, tofu) → savory only (stir-fry, roast, soup, curry, grill).
+- grain (rice, pasta, oats, flour) → base for bowls, soups, baked goods, porridge.
+- vegetable → soups, stir-fry, salads, roasted sides, omelettes.
+- condiment (soy sauce, olive oil, hot sauce, vinegar) → supporting / seasoning role only, never the main ingredient.
 
 RECIPE RULES:
-1. Each recipe must use 2–5 ingredients total.
-2. Only combine COMPATIBLE ingredient categories. If required ingredients are incompatible with each other (e.g. strawberries + raw chicken), put them in SEPARATE recipes using valid subsets.
-3. Every recipe name must be specific to the actual ingredients (not generic like "Quick Bowl" or "Pantry Skillet").
-4. Do NOT add ingredients not in the provided lists (except water, salt, pepper, cooking oil).
-5. Each recipe must be a different dish (different method or cuisine).
+1. Use 2–5 ingredients per recipe.
+2. Only combine COMPATIBLE categories. If required items span incompatible categories (e.g. strawberries + chicken), assign each to a SEPARATE recipe using a valid subset — do NOT mix them.
+3. Dish name must clearly reflect the actual ingredients (e.g. "Spinach Egg Scramble", "Strawberry Yogurt Smoothie"). NEVER use generic placeholders like "Quick Bowl", "Pantry Skillet", or "Simple Plate".
+4. Only use ingredients from the lists above. The only allowed additions are: water, salt, pepper, cooking oil.
+5. Both recipes must be distinctly different dishes (different cooking method or cuisine).
 6. ${variationHint}
-7. If no valid recipe can be made from ANY combination of the ingredients, output ONLY the fail-safe below.
+7. If — after ignoring unrecognized items and applying compatibility rules — no valid recipe is possible, output ONLY the fail-safe.
 
-FAIL-SAFE (use ONLY if truly no edible combination exists):
+FAIL-SAFE (output this and NOTHING ELSE when no valid recipe exists):
 🍳 Thoughts and Prayers
 Ingredients: Nothing!
 Instructions:
 1. Order in.
 ⏱️ 0 minutes
 
-OUTPUT FORMAT — use EXACTLY this format for each recipe, no markdown bold, no extra lines:
+OUTPUT FORMAT — follow exactly, no markdown, no bold, no extra blank lines inside a recipe:
 
-🍳 <Specific Dish Name>
-Ingredients: <comma-separated list — only from above>
+🍳 <Dish Name>
+Ingredients: <comma-separated>
 Instructions:
 1. <step>
 2. <step>
@@ -224,7 +228,15 @@ Instructions:
 
 ---
 
-Separate the two recipes with exactly "---" on its own line. Output nothing else.`;
+🍳 <Dish Name>
+Ingredients: <comma-separated>
+Instructions:
+1. <step>
+2. <step>
+3. <step>
+⏱️ <X> minutes
+
+The separator between recipes is exactly "---" on its own line. Output nothing outside this format.`;
 
       const result = await model.generateContent(prompt);
       return result.response.text().trim();
@@ -233,25 +245,36 @@ Separate the two recipes with exactly "---" on its own line. Output nothing else
     }
   }
 
-  // Fallback mock when Gemini is unavailable
-  const mainIngredient = required[0]?.name || optional[0]?.name || 'your ingredients';
-  return `🍳 ${mainIngredient} Scramble
-Ingredients: ${(required[0]?.name || optional[0]?.name) || 'pantry items'}
+  // Fallback mock when Gemini is unavailable — build something ingredient-specific
+  const all = [...required, ...optional];
+  if (all.length === 0) {
+    return `🍳 Thoughts and Prayers\nIngredients: Nothing!\nInstructions:\n1. Order in.\n⏱️ 0 minutes`;
+  }
+
+  const a = required[0] || optional[0];
+  const b = required[1] || optional[1];
+  const nameA = a.name;
+  const nameB = b?.name;
+  const pairLabel = nameB ? `${nameA} & ${nameB}` : nameA;
+
+  return `🍳 ${pairLabel} Sauté
+Ingredients: ${requiredList || optionalList}
 Instructions:
-1. Heat a pan over medium heat with a little oil
-2. Add ${mainIngredient} and cook through, stirring gently
-3. Season with salt and pepper to taste
+1. Heat a pan over medium heat with a drizzle of oil
+2. Add ${nameA} and cook for 3-4 minutes, stirring occasionally
+3. ${nameB ? `Add ${nameB} and cook 2 more minutes` : 'Season with salt and pepper'}
+4. Serve hot
 ⏱️ 10 minutes
 
 ---
 
-🥗 Simple ${mainIngredient} Plate
-Ingredients: ${requiredList || optionalList}
+🥗 ${nameA} with ${nameB || 'Seasoning'}
+Ingredients: ${nameB ? `${nameA}, ${nameB}` : nameA}
 Instructions:
-1. Prepare ${mainIngredient} according to your preference
-2. Combine with any complementary items you have
-3. Serve and enjoy
-⏱️ 15 minutes`;
+1. Prepare ${nameA} — wash or peel as needed
+2. ${nameB ? `Combine with ${nameB}` : 'Season with salt, pepper, and a drizzle of olive oil'}
+3. Serve immediately
+⏱️ 5 minutes`;
 }
 
 module.exports = { initGemini, generateSuggestion, identifyFoodFromImage, generateDashboardSummary, generateRecipeSuggestion };
