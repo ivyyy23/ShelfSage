@@ -166,9 +166,9 @@ function getMockSuggestion(itemName, category) {
   return categoryDefaults[category] || `💡 Use your ${itemName} today! Check online for quick recipe ideas with this ingredient.`;
 }
 
-// Suggest recipes using selected pantry items
-// requiredItems: items user explicitly selected (MUST appear in recipe)
-// optionalItems: rest of pantry (AI may use these too)
+// Suggest recipes using selected pantry items.
+// requiredItems: ingredients the user selected — at least one must appear in each recipe.
+// optionalItems: rest of the pantry — use freely to make complete, sensible dishes.
 async function generateRecipeSuggestion({ requiredItems, optionalItems } = {}) {
   const required = Array.isArray(requiredItems) ? requiredItems : [];
   const optional = Array.isArray(optionalItems) ? optionalItems : [];
@@ -180,64 +180,57 @@ async function generateRecipeSuggestion({ requiredItems, optionalItems } = {}) {
   const requiredList = required.map(i => i.name).join(', ');
   const optionalList = optional.map(i => i.name).join(', ');
 
-  // Random variation style hint for each call
+  // Rotate cuisine/style so repeated calls produce different results
   const VARIATIONS = [
-    'Consider Mediterranean or Middle Eastern flavor profiles if compatible.',
-    'Consider Asian (Japanese, Thai, Chinese) cooking styles if compatible.',
-    'Consider a breakfast or brunch angle if ingredients allow.',
-    'Consider Latin American or Mexican flavor profiles if compatible.',
-    'Consider a comfort food, hearty, warming approach if compatible.'
+    'Lean toward Mediterranean or Middle Eastern flavors where the ingredients allow.',
+    'Lean toward Asian flavors (Japanese, Thai, Chinese, Korean) where the ingredients allow.',
+    'Consider a breakfast or brunch angle if the ingredients suit it.',
+    'Lean toward Latin American or Mexican flavors where the ingredients allow.',
+    'Go for classic Western comfort food — hearty, warming, familiar.'
   ];
   const variationHint = VARIATIONS[Math.floor(Math.random() * VARIATIONS.length)];
 
   if (model) {
     try {
-      const requiredSection = requiredList
-        ? `REQUIRED INGREDIENTS (must appear in every recipe): ${requiredList}`
+      const selectedSection = requiredList
+        ? `USER-SELECTED INGREDIENTS (use at least one per recipe): ${requiredList}`
         : '';
-      const optionalSection = optionalList
-        ? `OPTIONAL PANTRY ITEMS (may use to complement): ${optionalList}`
+      const pantrySection = optionalList
+        ? `OTHER PANTRY ITEMS (use freely to complete the recipe): ${optionalList}`
         : '';
 
       const prompt = `You are ShelfSage, a home cooking assistant. Generate 2 realistic, edible recipes.
 
-${requiredSection}
-${optionalSection}
+${selectedSection}
+${pantrySection}
 
-PRE-PROCESSING — do this silently before generating recipes:
-- If any ingredient name is unrecognizable, unclear, or not a real food item, ignore it completely as if it were not listed.
-- Classify each remaining ingredient into one of: dairy, protein, grain, fruit, vegetable, condiment, beverage.
+APPLIANCES AVAILABLE: blender, microwave, oven, toaster, stovetop pan/skillet, steamer, food processor, instant pot, rice cooker, air fryer. Use whichever fits the recipe.
 
-COMPATIBILITY RULES — strictly enforced:
-- dairy (milk, yogurt, cream, cheese) → smoothies, sauces, soups, desserts, baked goods. NEVER combine raw dairy with raw meat in the same dish.
-- fruit (strawberries, apples, berries, banana, mango) → smoothies, desserts, fresh salads. Only combine with savory meat if it is a well-known dish (e.g. mango chicken, apple pork chops).
-- bread → sandwiches, toast, French toast, croutons, bread pudding.
-- eggs → omelettes, scrambles, fried rice, baking.
-- protein / meat (chicken, beef, fish, tofu) → savory only (stir-fry, roast, soup, curry, grill).
-- grain (rice, pasta, oats, flour) → base for bowls, soups, baked goods, porridge.
-- vegetable → soups, stir-fry, salads, roasted sides, omelettes.
-- condiment (soy sauce, olive oil, hot sauce, vinegar) → supporting / seasoning role only, never the main ingredient.
+INGREDIENT RULES:
+- Ignore any ingredient name that is not a real, recognisable food item.
+- You MUST use at least one user-selected ingredient in each recipe.
+- You may also use other pantry items and the following staples freely: water, salt, pepper, cooking oil, butter, garlic, onion, basic spices.
+- Do NOT use an ingredient in a way that makes no culinary sense (e.g. milk in a stir-fry, yogurt with raw chicken as a stir-fry sauce, fruit blended with beef).
 
 RECIPE RULES:
-1. Use 2–5 ingredients per recipe.
-2. Only combine COMPATIBLE categories. If required items span incompatible categories (e.g. strawberries + chicken), assign each to a SEPARATE recipe using a valid subset — do NOT mix them.
-3. Dish name must clearly reflect the actual ingredients (e.g. "Spinach Egg Scramble", "Strawberry Yogurt Smoothie"). NEVER use generic placeholders like "Quick Bowl", "Pantry Skillet", or "Simple Plate".
-4. Only use ingredients from the lists above. The only allowed additions are: water, salt, pepper, cooking oil.
-5. Both recipes must be distinctly different dishes (different cooking method or cuisine).
-6. ${variationHint}
-7. If — after ignoring unrecognized items and applying compatibility rules — no valid recipe is possible, output ONLY the fail-safe.
+1. Every recipe must be a normal, coherent, real-world dish a home cook would actually make.
+2. Choose a cooking method that suits the ingredients — do not force an incompatible method.
+3. Name the dish after its actual ingredients or style (e.g. "Spinach & Egg Scramble", "Strawberry Yogurt Smoothie", "Chicken Rice Soup"). No generic names like "Quick Bowl" or "Pantry Skillet".
+4. The two recipes must be distinctly different dishes (different method or cuisine style).
+5. ${variationHint}
+6. If — after ignoring unrecognised items — no valid recipe can be formed using any of the selected ingredients, output ONLY the fail-safe below.
 
-FAIL-SAFE (output this and NOTHING ELSE when no valid recipe exists):
+FAIL-SAFE (use ONLY when truly nothing works):
 🍳 Thoughts and Prayers
 Ingredients: Nothing!
 Instructions:
 1. Order in.
 ⏱️ 0 minutes
 
-OUTPUT FORMAT — follow exactly, no markdown, no bold, no extra blank lines inside a recipe:
+OUTPUT FORMAT — use exactly this structure, no markdown, no asterisks, no extra blank lines inside a recipe block:
 
 🍳 <Dish Name>
-Ingredients: <comma-separated>
+Ingredients: <comma-separated list>
 Instructions:
 1. <step>
 2. <step>
@@ -247,14 +240,14 @@ Instructions:
 ---
 
 🍳 <Dish Name>
-Ingredients: <comma-separated>
+Ingredients: <comma-separated list>
 Instructions:
 1. <step>
 2. <step>
 3. <step>
 ⏱️ <X> minutes
 
-The separator between recipes is exactly "---" on its own line. Output nothing outside this format.`;
+Separate the two recipes with exactly "---" on its own line. Output nothing else.`;
 
       const result = await model.generateContent(prompt);
       return result.response.text().trim();
