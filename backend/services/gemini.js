@@ -199,26 +199,38 @@ async function generateRecipeSuggestion({ requiredItems, optionalItems } = {}) {
         ? `OTHER PANTRY ITEMS (use freely to complete the recipe): ${optionalList}`
         : '';
 
-      const prompt = `You are ShelfSage, a home cooking assistant. Generate 2 realistic, edible recipes.
+      const prompt = `You are an expert chef and home cooking assistant. Generate 2 realistic, edible recipes.
 
 ${selectedSection}
 ${pantrySection}
 
-APPLIANCES AVAILABLE: blender, microwave, oven, toaster, stovetop pan/skillet, steamer, food processor, instant pot, rice cooker, air fryer. Use whichever fits the recipe.
+APPLIANCES AVAILABLE: blender, microwave, oven, toaster, stovetop pan/skillet, steamer, food processor, instant pot, rice cooker, air fryer. Use whichever fits the recipe best.
 
 INGREDIENT RULES:
-- Ignore any ingredient name that is not a real, recognisable food item.
-- You MUST use at least one user-selected ingredient in each recipe.
-- You may also use other pantry items and the following staples freely: water, salt, pepper, cooking oil, butter, garlic, onion, basic spices.
-- Do NOT use an ingredient in a way that makes no culinary sense (e.g. milk in a stir-fry, yogurt with raw chicken as a stir-fry sauce, fruit blended with beef).
+- Ignore any name that is not a real, recognisable food item.
+- Use at least one user-selected ingredient in each recipe.
+- You may also use other pantry items and basic staples freely: water, salt, pepper, cooking oil, butter, garlic, onion, common spices.
+- Only use an ingredient in a way that makes culinary sense (no milk in a stir-fry, no fruit blended with beef, etc.).
+
+INGREDIENTS LIST RULE — critical:
+- The "Ingredients:" line must list ONLY the ingredients actually used in that recipe.
+- Ingredients may include brief prep descriptors inline, e.g. "diced onion", "grated cheese", "sliced chicken breast", "marinated chicken and yogurt". This is preferred over stating prep in the instructions.
+- Do NOT list an ingredient that does not appear in the instructions.
+- Do NOT list an ingredient that is not used at all.
+
+INSTRUCTIONS RULE — critical:
+- Write only steps that are actually necessary to make the dish.
+- Do NOT state obvious or trivial prep like "wash the vegetables", "peel the fruit", or "prepare X — wash or peel as needed".
+- Do NOT repeat what is already expressed in the ingredient descriptor (if you wrote "diced onion" in Ingredients, do not write "dice the onion" in Instructions).
+- Steps should describe the actual cooking: heat, combine, stir, season, blend, bake, simmer, etc.
+- Every instruction step must match the ingredients listed — no phantom ingredients, no phantom steps.
 
 RECIPE RULES:
 1. Every recipe must be a normal, coherent, real-world dish a home cook would actually make.
-2. Choose a cooking method that suits the ingredients — do not force an incompatible method.
-3. Name the dish after its actual ingredients or style (e.g. "Spinach & Egg Scramble", "Strawberry Yogurt Smoothie", "Chicken Rice Soup"). No generic names like "Quick Bowl" or "Pantry Skillet".
-4. The two recipes must be distinctly different dishes (different method or cuisine style).
-5. ${variationHint}
-6. If — after ignoring unrecognised items — no valid recipe can be formed using any of the selected ingredients, output ONLY the fail-safe below.
+2. Name the dish specifically after its ingredients or style — e.g. "Spinach & Egg Scramble", "Strawberry Yogurt Smoothie", "Chicken Rice Soup". No generic names like "Quick Bowl" or "Pantry Skillet".
+3. The two recipes must be distinctly different (different cooking method or cuisine).
+4. ${variationHint}
+5. If no valid recipe can be formed from the selected ingredients, output ONLY the fail-safe.
 
 FAIL-SAFE (use ONLY when truly nothing works):
 🍳 Thoughts and Prayers
@@ -227,10 +239,10 @@ Instructions:
 1. Order in.
 ⏱️ 0 minutes
 
-OUTPUT FORMAT — use exactly this structure, no markdown, no asterisks, no extra blank lines inside a recipe block:
+OUTPUT FORMAT — follow exactly, no markdown, no asterisks, no extra blank lines inside a recipe block:
 
 🍳 <Dish Name>
-Ingredients: <comma-separated list>
+Ingredients: <comma-separated, prep descriptors allowed>
 Instructions:
 1. <step>
 2. <step>
@@ -240,7 +252,7 @@ Instructions:
 ---
 
 🍳 <Dish Name>
-Ingredients: <comma-separated list>
+Ingredients: <comma-separated, prep descriptors allowed>
 Instructions:
 1. <step>
 2. <step>
@@ -269,22 +281,22 @@ Separate the two recipes with exactly "---" on its own line. Output nothing else
   const pairLabel = nameB ? `${nameA} & ${nameB}` : nameA;
 
   return `🍳 ${pairLabel} Sauté
-Ingredients: ${requiredList || optionalList}
+Ingredients: ${nameB ? `${nameA}, ${nameB}` : nameA}
 Instructions:
 1. Heat a pan over medium heat with a drizzle of oil
-2. Add ${nameA} and cook for 3-4 minutes, stirring occasionally
-3. ${nameB ? `Add ${nameB} and cook 2 more minutes` : 'Season with salt and pepper'}
+2. Add ${nameA} and cook for 3–4 minutes, stirring occasionally
+3. ${nameB ? `Add ${nameB} and cook for 2 more minutes` : 'Season with salt and pepper to taste'}
 4. Serve hot
 ⏱️ 10 minutes
 
 ---
 
-🥗 ${nameA} with ${nameB || 'Seasoning'}
+🥗 ${nameA}${nameB ? ` & ${nameB} Salad` : ' Bowl'}
 Ingredients: ${nameB ? `${nameA}, ${nameB}` : nameA}
 Instructions:
-1. Prepare ${nameA} — wash or peel as needed
-2. ${nameB ? `Combine with ${nameB}` : 'Season with salt, pepper, and a drizzle of olive oil'}
-3. Serve immediately
+1. ${nameB ? `Combine ${nameA} and ${nameB} in a bowl` : `Place ${nameA} in a bowl`}
+2. Drizzle with olive oil, season with salt and pepper
+3. Toss and serve
 ⏱️ 5 minutes`;
 }
 
