@@ -49,6 +49,20 @@ Suggest a simple way to use this item today. Be specific with a recipe idea or u
   return getMockSuggestion(itemName, category);
 }
 
+/**
+ * Validate that a date string is parseable and in the future.
+ * Returns normalised "YYYY-MM-DD" or null.
+ */
+function validateFutureDate(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (d < today) return null;
+  return d.toISOString().split('T')[0];
+}
+
 // Identify food from an uploaded image using Gemini Vision
 async function identifyFoodFromImage(imageBuffer, mimeType) {
   if (model) {
@@ -59,7 +73,8 @@ async function identifyFoodFromImage(imageBuffer, mimeType) {
 If this is a food label or packaging:
 - Look for text like "Best By", "Best Before", "Use By", "Exp", "BB", "Expires", "Expiry Date" followed by a date
 - Extract that expiry date and return it in YYYY-MM-DD format
-- For month/year dates (e.g. "03/2026"), use the last day of that month
+- For month/year only dates (e.g. "03/2026" or "Mar 2026"), use the 1st day of that month
+- The expiry date must be today or in the future — if it is in the past, set "expirationDate" to null
 
 If no expiry date is visible in the image, set "expirationDate" to null.
 Be specific about the food item name.`;
@@ -77,7 +92,10 @@ Be specific about the food item name.`;
 
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        const parsed = JSON.parse(jsonMatch[0]);
+        // Validate the returned date — reject past or malformed dates
+        parsed.expirationDate = validateFutureDate(parsed.expirationDate);
+        return parsed;
       }
       throw new Error('Could not parse Gemini response');
     } catch (error) {

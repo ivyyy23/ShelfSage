@@ -61,7 +61,7 @@ export default function Dashboard({ items, onItemClick, onDeleteItem, onAddClick
       });
       if (res.ok) {
         const data = await res.json();
-        const parts = (data.recipe || '').split(/\n---\n|\n---$|^---\n|^---$/m);
+        const parts = (data.recipe || '').split(/\n\s*---\s*\n/);
         setRecipes(parts.filter(p => p.trim()));
       } else {
         setRecipes(['Could not generate a recipe right now. Try again!']);
